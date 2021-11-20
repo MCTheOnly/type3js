@@ -39,6 +39,11 @@ const geometry2 = new THREE.SphereBufferGeometry(.5, 64, 64);
 //TEXTURES
 const textureLoader = new THREE.TextureLoader();
 const normalTexture = textureLoader.load('./sphereNM.png');
+const bg = textureLoader.load('./bg.jpeg', () => {
+	const rt = new THREE.WebGLCubeRenderTarget(bg.image.height);
+	rt.fromEquirectangularTexture(renderer, bg);
+	scene.background = rt.texture;
+});
 
 //MATERIALS
 const material = new THREE.MeshStandardMaterial();
@@ -134,7 +139,7 @@ GUIlight2.addColor(light3color, 'color').onChange(() => {
 //RENDERER
 const renderer = new WebGLRenderer({
 	canvas: canvas,
-	alpha: true
+	alpha: false
 });
 
 window.addEventListener('resize', () => {
@@ -145,8 +150,6 @@ window.addEventListener('resize', () => {
 	renderer.setSize(sizes.width, sizes.height);
 	renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 });
-
-// renderer.domElement.addEventListener('click', onclick, false)
 
 renderer.setSize(sizes.width, sizes.height);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -170,24 +173,12 @@ scene.traverse((object) => {
 });
 
 buttonWarm.addEventListener('click', () => {
-	// camera.position.set(-6.66, 1.28, 5.25);
-	// camera.lookAt(0, 0, 0);
-	// updateCamera()
-	pointLight3.intensity = 0
-	pointLight2.intensity = 10
 	data.cameraFlag.warm = 'true'
 	data.cameraFlag.cold = 'false'
 	data.cameraFlag.init = 'false'
 
 });
 buttonCold.addEventListener('click', () => {
-	// camera.rotation.set(0, 0, 0);
-
-	// camera.position.set(6.66, -1.28, -5.25);
-	// camera.lookAt(0, 0, 0);
-	// updateCamera();
-	pointLight3.intensity = 10;
-	pointLight2.intensity = 0;
 	data.cameraFlag.warm = 'false'
 	data.cameraFlag.cold = 'true'
 	data.cameraFlag.init = 'false'
@@ -205,8 +196,7 @@ window.addEventListener('click', (e) => {
 	setTimeout(() => {
 		data.mouse.clicked = 'false'
 		console.log('off');
-
-	}, 500)
+	}, 20)
 
 });
 
@@ -227,7 +217,7 @@ const data = {
 		name: ''
 	},
 	mouse: {
-		clicked: 'true'
+		clicked: 'false'
 	},
 	cameraFlag: {
 		init: 'false',
@@ -236,12 +226,16 @@ const data = {
 	},
 	earth: {
 		clicked: 'false'
+	},
+	moon: {
+		animate: 'false'
 	}
 }
 
 var r = 10;
 var theta = 1;
 var dTheta = 3 * Math.PI / 1000;
+let incr = 0;
 
 const tick = () => {
 	cameraX = camera.position.x;
@@ -253,8 +247,10 @@ const tick = () => {
 	const elapsedTime = clock.getElapsedTime();
 
 	if (data.cameraFlag.warm == 'true') {
-		camera.position.lerpVectors(v1, vWarm, data.lerpVectorsAlpha);
-		camera.lookAt(0, 0, 0)
+		if (data.cameraFlag.init == 'false') {
+			camera.position.lerpVectors(v1, vWarm, data.lerpVectorsAlpha);
+			camera.lookAt(0, 0, 0)
+		}
 	}
 	if (data.cameraFlag.cold == 'true') {
 		if (data.cameraFlag.init == 'false') {
@@ -270,13 +266,32 @@ const tick = () => {
 		pointLight3.intensity = 10;
 		pointLight2.intensity = 10;
 		camera.lookAt(0, 0, 0)
+	}
 
+	if (data.cameraFlag.warm == 'true') {
+		if (pointLight3.intensity > 0) {
+			incr = -0.5
+			pointLight3.intensity += incr
+		}
+		if (pointLight2.intensity < 10) {
+			incr = 0.5
+			pointLight2.intensity += incr
+		}
+	}
+
+	if (data.cameraFlag.cold == 'true') {
+		if (pointLight2.intensity > 0) {
+			incr = -0.5
+			pointLight2.intensity += incr
+		}
+		if (pointLight3.intensity < 10) {
+			incr = 0.5
+			pointLight3.intensity += incr
+		}
 	}
 	//Raycaster
 	raycaster.setFromCamera(mouse, camera);
 	const intersects = raycaster.intersectObjects(objs);
-
-
 
 	theta += dTheta;
 	for (const intersect of intersects) {
@@ -286,18 +301,25 @@ const tick = () => {
 			data.object.name = 'moon'
 			intersect.object.position.x = -r * Math.cos(theta);
 			intersect.object.position.z = r * Math.sin(theta);
+			if (data.mouse.clicked == 'true') {
+				console.log('moon');
+				data.moon.animate = 'true'
+			}
 		} else if (intersect.object == earth) {
-			// camera.position.lerpVectors(v1, vCold, data.lerpVectorsAlpha)
-			// console.log('earth')
 			if (data.mouse.clicked == 'true') {
 				data.cameraFlag.init = 'true'
 				data.cameraFlag.warm = 'false'
 				data.cameraFlag.cold = 'false'
+				data.moon.animate = 'false'
 			}
-
 		}
 	}
-	data.object.intersects = 'false'
+	if (data.moon.animate == 'true') {
+		camera.position.set(moon.position.x - 1, moon.position.y + 1, moon.position.z - 2)
+		camera.lookAt(moon.position.x, moon.position.y, moon.position.z)
+		// camera.lookAt(0, 0, 0);
+	}
+	// data.object.intersects = 'false'
 	for (const object of objs) {
 		if (!intersects.find(intersect => intersect.object === object)) {
 			if (object == moon) {
@@ -311,22 +333,7 @@ const tick = () => {
 		}
 	}
 	earth.rotation.y = .08 * elapsedTime;
-	var selectedObject
 
-	// function onclick() {
-	// 	alert("onclick")
-	// 	var mouse = new THREE.Vector2();
-	// 	raycaster.setFromCamera(mouse, camera);
-	// 	var intersects = raycaster.intersectObjects(objs, true);
-	// 	console.log(intersects);
-	// 	if (intersects.length > 0) {
-	// 		console.log(intersects);
-	// 		selectedObject = intersects[0];
-	// 		alert(selectedObject);
-	// 	}
-	// }
-	// moon.updateMatrix();
-	// console.log(data.object);
 	camera.updateMatrix();
 	window.requestAnimationFrame(tick);
 	render();
