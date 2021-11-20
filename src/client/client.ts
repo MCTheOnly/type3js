@@ -77,7 +77,7 @@ GUIcameras.add(camera.rotation, 'y').min(-10).max(10).step(0.01);
 GUIcameras.add(camera.rotation, 'z').min(-10).max(10).step(0.01);
 GUIcameras.add(camera, 'fov', 1, 180).onChange(updateCamera);
 
-const controls = new OrbitControls(camera, canvas);
+// const controls = new OrbitControls(camera, canvas);
 
 window.addEventListener('resize', onWindowResize, false)
 function onWindowResize() {
@@ -146,6 +146,8 @@ window.addEventListener('resize', () => {
 	renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 });
 
+// renderer.domElement.addEventListener('click', onclick, false)
+
 renderer.setSize(sizes.width, sizes.height);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
@@ -168,22 +170,28 @@ scene.traverse((object) => {
 });
 
 buttonWarm.addEventListener('click', () => {
-	// camera.rotation.set(-2.44, -1.56, -2.44);
-	// camera.rotation.set(0, 0, 0);
-	camera.position.set(-6.66, 1.28, 5.25);
-	camera.lookAt(0, 0, 0);
-	pointLight3.intensity = 0;
-	pointLight2.intensity = 10;
-	updateCamera();
+	// camera.position.set(-6.66, 1.28, 5.25);
+	// camera.lookAt(0, 0, 0);
+	// updateCamera()
+	pointLight3.intensity = 0
+	pointLight2.intensity = 10
+	data.cameraFlag.warm = 'true'
+	data.cameraFlag.cold = 'false'
+	data.cameraFlag.init = 'false'
+
 });
 buttonCold.addEventListener('click', () => {
 	// camera.rotation.set(0, 0, 0);
 
-	camera.position.set(6.66, -1.28, -5.25);
-	camera.lookAt(0, 0, 0);
+	// camera.position.set(6.66, -1.28, -5.25);
+	// camera.lookAt(0, 0, 0);
+	// updateCamera();
 	pointLight3.intensity = 10;
 	pointLight2.intensity = 0;
-	updateCamera();
+	data.cameraFlag.warm = 'false'
+	data.cameraFlag.cold = 'true'
+	data.cameraFlag.init = 'false'
+
 });
 
 window.addEventListener('mousemove', (e) => {
@@ -191,42 +199,110 @@ window.addEventListener('mousemove', (e) => {
 	mouse.y = e.clientY / sizes.height * -2 + 1;
 });
 
+window.addEventListener('click', (e) => {
+	data.mouse.clicked = 'true'
+	console.log('on');
+	setTimeout(() => {
+		data.mouse.clicked = 'false'
+		console.log('off');
+
+	}, 500)
+
+});
+
+let cameraX = camera.position.x;
+let cameraY = camera.position.y;
+let cameraZ = camera.position.z;
+
+let v1 = new THREE.Vector3(cameraX, cameraY, cameraZ);
+const vInit = new THREE.Vector3(0, 5, 14);
+const vWarm = new THREE.Vector3(-6.66, 1.28, 5.25);
+const vCold = new THREE.Vector3(6.66, 1.28, 5.25);
+
+const data = {
+	lerpAlpha: 0.1,
+	lerpVectorsAlpha: 0.01,
+	object: {
+		intersects: 'false',
+		name: ''
+	},
+	mouse: {
+		clicked: 'true'
+	},
+	cameraFlag: {
+		init: 'false',
+		warm: 'false',
+		cold: 'false'
+	},
+	earth: {
+		clicked: 'false'
+	}
+}
+
 var r = 10;
 var theta = 1;
 var dTheta = 3 * Math.PI / 1000;
 
 const tick = () => {
-	let cameraX = camera.position.x;
-	let cameraY = camera.position.y;
-	let cameraZ = camera.position.z;
+	cameraX = camera.position.x;
+	cameraY = camera.position.y;
+	cameraZ = camera.position.z;
 
-	const v1 = new THREE.Vector3(cameraX, cameraY, cameraZ);
-	const v2 = new THREE.Vector3(6.66, -1.28, -5.25);
+	v1 = new THREE.Vector3(cameraX, cameraY, cameraZ);
 
 	const elapsedTime = clock.getElapsedTime();
-	camera.position.lerpVectors(v2, v1, 1);
 
+	if (data.cameraFlag.warm == 'true') {
+		camera.position.lerpVectors(v1, vWarm, data.lerpVectorsAlpha);
+		camera.lookAt(0, 0, 0)
+	}
+	if (data.cameraFlag.cold == 'true') {
+		if (data.cameraFlag.init == 'false') {
+			camera.position.lerpVectors(v1, vCold, data.lerpVectorsAlpha)
+			camera.lookAt(0, 0, 0)
+
+		}
+		// camera.position.lerpVectors(v1, vCold, data.lerpVectorsAlpha);
+		// camera.lookAt(0, 0, 0)
+	}
+	if (data.cameraFlag.init == 'true' && data.cameraFlag.cold == 'false' && data.cameraFlag.warm == 'false') {
+		camera.position.lerpVectors(v1, vInit, data.lerpVectorsAlpha)
+		pointLight3.intensity = 10;
+		pointLight2.intensity = 10;
+		camera.lookAt(0, 0, 0)
+
+	}
 	//Raycaster
 	raycaster.setFromCamera(mouse, camera);
 	const intersects = raycaster.intersectObjects(objs);
 
-	for (const intersect of intersects) {
-		if (intersect.object == moon) {
-			dTheta = 1 * Math.PI / 1000;
 
-			theta += dTheta;
+
+	theta += dTheta;
+	for (const intersect of intersects) {
+		dTheta = 1 * Math.PI / 1000;
+		data.object.intersects = 'true'
+		if (intersect.object == moon) {
+			data.object.name = 'moon'
 			intersect.object.position.x = -r * Math.cos(theta);
 			intersect.object.position.z = r * Math.sin(theta);
-			// intersect.object.position.x = intersect.object.position.x;
-			// intersect.object.position.z = intersect.object.position.z;
+		} else if (intersect.object == earth) {
+			// camera.position.lerpVectors(v1, vCold, data.lerpVectorsAlpha)
+			// console.log('earth')
+			if (data.mouse.clicked == 'true') {
+				data.cameraFlag.init = 'true'
+				data.cameraFlag.warm = 'false'
+				data.cameraFlag.cold = 'false'
+			}
+
 		}
 	}
+	data.object.intersects = 'false'
 	for (const object of objs) {
 		if (!intersects.find(intersect => intersect.object === object)) {
 			if (object == moon) {
 				dTheta = 3 * Math.PI / 1000;
 
-				theta += dTheta;
 				moon.scale.set(1.5, 1.5, 1.5);
 				object.position.x = -r * Math.cos(theta);
 				object.position.z = r * Math.sin(theta);
@@ -234,10 +310,23 @@ const tick = () => {
 			}
 		}
 	}
-
 	earth.rotation.y = .08 * elapsedTime;
+	var selectedObject
 
+	// function onclick() {
+	// 	alert("onclick")
+	// 	var mouse = new THREE.Vector2();
+	// 	raycaster.setFromCamera(mouse, camera);
+	// 	var intersects = raycaster.intersectObjects(objs, true);
+	// 	console.log(intersects);
+	// 	if (intersects.length > 0) {
+	// 		console.log(intersects);
+	// 		selectedObject = intersects[0];
+	// 		alert(selectedObject);
+	// 	}
+	// }
 	// moon.updateMatrix();
+	// console.log(data.object);
 	camera.updateMatrix();
 	window.requestAnimationFrame(tick);
 	render();
