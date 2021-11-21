@@ -5,9 +5,18 @@ import './style.scss';
 
 import * as THREE from 'three';
 import * as dat from 'dat.gui';
-import { DoubleSide, WebGLRenderer } from 'three';
+import gsap from 'gsap';
+// import { TWEEN } from 'three/examples/jsm/libs/tween.module.min'
+import { DoubleSide, Group, Loader, WebGLRenderer } from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader'
+const vertexShader = require('./shaders/vertex.glsl').default
+const fragmentShader = require('./shaders/fragment.glsl').default
+const atmosphereVertexShader = require('./shaders/atmosphereVertex.glsl').default
+const atmosphereFragmentShader = require('./shaders/atmosphereFragment.glsl').default
+
+console.log(vertexShader)
+let i, j
 
 //HTML
 const buttonWarm = document.querySelector('.js--warm') as HTMLElement
@@ -20,7 +29,6 @@ const sizes = {
 	width: window.innerWidth,
 	height: window.innerHeight
 }
-
 //GUI
 const gui = new dat.GUI();
 const GUIlights = gui.addFolder('Lights')
@@ -32,36 +40,71 @@ const GUIearth = GUIobjects.addFolder('Earth')
 const GUImoon = GUIobjects.addFolder('Moon')
 const GUIcameras = gui.addFolder('Cameras')
 
-//OBJECTS
-const geometry = new THREE.SphereBufferGeometry(5, 64, 64);
-const geometry2 = new THREE.SphereBufferGeometry(.5, 64, 64);
-
 //TEXTURES
-const textureLoader = new THREE.TextureLoader();
-const normalTexture = textureLoader.load('./sphereNM.png');
+const textureLoader = new THREE.TextureLoader()
 const bg = textureLoader.load('./bg.jpeg', () => {
-	const rt = new THREE.WebGLCubeRenderTarget(bg.image.height);
-	rt.fromEquirectangularTexture(renderer, bg);
-	scene.background = rt.texture;
-});
+	const rt = new THREE.WebGLCubeRenderTarget(bg.image.height)
+	rt.fromEquirectangularTexture(renderer, bg)
+	scene.background = rt.texture
+})
+const cross = textureLoader.load('./cross.png')
 
-//MATERIALS
-const material = new THREE.MeshStandardMaterial();
-const material2 = new THREE.MeshStandardMaterial();
-material.metalness = .7;
-material.roughness = 0.2;
-material.color = new THREE.Color(0x666666);
-material.normalMap = normalTexture;
-material2.metalness = .1;
-material2.roughness = 1;
-material2.color = new THREE.Color(0x666666);
-material2.normalMap = normalTexture;
+//MESH FUNCTIONS
+const particlesCnt = 5000
+const posArray = new Float32Array(particlesCnt * 3)
+
+for (i = 0; i < particlesCnt * 3; i++) {
+	posArray[i] = (Math.random() - 0.5) * 60
+}
 
 //MESH
-const earth = new THREE.Mesh(geometry, material);
-const moon = new THREE.Mesh(geometry2, material2);
-scene.add(earth);
+const earth = new THREE.Mesh(new THREE.SphereBufferGeometry(5, 64, 64), new THREE.ShaderMaterial({
+	vertexShader,
+	fragmentShader,
+	uniforms: {
+		globeTexture: {
+			value: textureLoader.load('./earthUV.jpg')
+		}
+	}
+	// normalMap: textureLoader.load('./earthNM.png')
+}));
+
+const atmosphere = new THREE.Mesh(new THREE.SphereBufferGeometry(5, 64, 64), new THREE.ShaderMaterial({
+	vertexShader: atmosphereVertexShader,
+	fragmentShader: atmosphereFragmentShader,
+	blending: THREE.AdditiveBlending,
+	side: THREE.BackSide
+}));
+atmosphere.position.set(0, 0, 0);
+atmosphere.scale.set(1.1, 1.1, 1.1)
+const moon = new THREE.Mesh(new THREE.SphereBufferGeometry(.5, 64, 64), new THREE.MeshStandardMaterial({
+	metalness: .1,
+	roughness: 1,
+	color: new THREE.Color(0x666666),
+	normalMap: textureLoader.load('./sphereNM.png')
+}));
+const ring = new THREE.Points(new THREE.RingGeometry(7, 10, 200, 10), new THREE.PointsMaterial({
+	size: 0.005
+}));
+
+const particlesMesh = new THREE.Points(new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(posArray, 3)), new THREE.PointsMaterial({
+	size: 0.02,
+	// map: cross,
+	transparent: true,
+	// color: 'rgb(0, 255, 170)'
+}));
+
+//GROUPS
+const earthGroup = new THREE.Group()
+earthGroup.add(earth)
+ring.rotation.x = -5;
+
+scene.add(earthGroup);
+scene.add(atmosphere);
 scene.add(moon);
+scene.add(ring);
+scene.add(particlesMesh);
+
 
 //CAMERA
 const camera = new THREE.PerspectiveCamera(70, sizes.width / sizes.height, .1, 10000);
@@ -82,7 +125,7 @@ GUIcameras.add(camera.rotation, 'y').min(-10).max(10).step(0.01);
 GUIcameras.add(camera.rotation, 'z').min(-10).max(10).step(0.01);
 GUIcameras.add(camera, 'fov', 1, 180).onChange(updateCamera);
 
-// const controls = new OrbitControls(camera, canvas);
+const controls = new OrbitControls(camera, canvas);
 
 window.addEventListener('resize', onWindowResize, false)
 function onWindowResize() {
@@ -139,7 +182,8 @@ GUIlight2.addColor(light3color, 'color').onChange(() => {
 //RENDERER
 const renderer = new WebGLRenderer({
 	canvas: canvas,
-	alpha: false
+	alpha: false,
+	antialias: true
 });
 
 window.addEventListener('resize', () => {
@@ -246,6 +290,14 @@ const tick = () => {
 
 	const elapsedTime = clock.getElapsedTime();
 
+	function cameraFollow() {
+		const loopTime = 20
+		const t = (elapsedTime % loopTime) / loopTime
+		const t2 = (elapsedTime + 0.1) % loopTime
+	}
+
+	// const pos = torus.geometry.path.get
+
 	if (data.cameraFlag.warm == 'true') {
 		if (data.cameraFlag.init == 'false') {
 			camera.position.lerpVectors(v1, vWarm, data.lerpVectorsAlpha);
@@ -306,6 +358,7 @@ const tick = () => {
 				data.moon.animate = 'true'
 			}
 		} else if (intersect.object == earth) {
+			atmosphere.scale.set(1.12, 1.12, 1.12)
 			if (data.mouse.clicked == 'true') {
 				data.cameraFlag.init = 'true'
 				data.cameraFlag.warm = 'false'
@@ -324,15 +377,32 @@ const tick = () => {
 		if (!intersects.find(intersect => intersect.object === object)) {
 			if (object == moon) {
 				dTheta = 3 * Math.PI / 1000;
-
 				moon.scale.set(1.5, 1.5, 1.5);
 				object.position.x = -r * Math.cos(theta);
 				object.position.z = r * Math.sin(theta);
 
 			}
+			if (object == earth) {
+				atmosphere.scale.set(1.1, 1.1, 1.1)
+			}
 		}
 	}
-	earth.rotation.y = .08 * elapsedTime;
+
+	ring.rotation.z = -.01 * elapsedTime
+	particlesMesh.rotation.y = -.1 * (elapsedTime * 1)
+
+	if (mouse.x) {
+		particlesMesh.rotation.x = mouse.y * (elapsedTime * 0.005)
+		particlesMesh.rotation.y = mouse.x * (elapsedTime * -0.005)
+	}
+
+	gsap.to(earthGroup.rotation, {
+		x: -mouse.y * 0.3,
+		y: mouse.x * .5,
+		duration: 2
+	})
+	earth.rotation.y = .09 * elapsedTime;
+
 
 	camera.updateMatrix();
 	window.requestAnimationFrame(tick);
